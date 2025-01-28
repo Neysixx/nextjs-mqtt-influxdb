@@ -19,9 +19,23 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+    Form,
+    FormControl,
+    FormDescription,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+} from "@/components/ui/form"
 import { Label } from './ui/label'
 import { Button } from './ui/button'
 import { ButtonSubmit } from './ui/shuip/button.submit'
+import { zodResolver } from "@hookform/resolvers/zod"
+import { set, useForm } from "react-hook-form"
+import { z } from "zod"
+import { useToast } from '@/hooks/use-toast'
+import { PublishMessage } from '@/actions/mqtt.action'
 
 export default function DataOverview() {
     const [data, setData] = useState<EquipmentFields[] | null>()
@@ -81,7 +95,7 @@ export function Equipment({ equipment }: { equipment: EquipmentFields }) {
                     <AccordionTrigger>{equipment.nom_equipement}</AccordionTrigger>
                     <AccordionContent>
                         {equipment.fields.map((field, index) => (
-                            <Item key={index} field={field} />
+                            <Item key={index} field={field} equipmentName={equipment.nom_equipement} />
                         ))}
                     </AccordionContent>
                 </AccordionItem>
@@ -90,38 +104,97 @@ export function Equipment({ equipment }: { equipment: EquipmentFields }) {
     )
 };
 
-export function Item({ field }: { field: string }) {
+
+const formSchema = z.object({
+    value: z.string().nonempty("Valeur requise").refine((value:string) => {
+        return !isNaN(Number(value));
+    }, {
+        message: "La valeur doit être un nombre"
+    }),
+})
+
+export function Item({ field, equipmentName }: { field: string, equipmentName: string }) {
+    const { toast } = useToast()
+
+    const [isLoading, setIsLoading] = useState(false)
+    const [open, setOpen] = useState(false)
+
+    const form = useForm<z.infer<typeof formSchema>>({
+        resolver: zodResolver(formSchema),
+        defaultValues: {
+            value: "",
+        },
+    })
+
+    async function onSubmit(data: z.infer<typeof formSchema>) {
+        setIsLoading(true)
+        try {
+            const payload = {
+                propertyId: equipmentName,
+                requestType: "write",
+                value: Number(data.value)
+            }
+            
+            // Use more specific topic
+            const topic = `command/${payload.propertyId}/${field}`;
+            const response = await PublishMessage(topic, JSON.stringify(payload))
+
+            if (!response.success) {
+                throw new Error(response.error)
+            }
+
+            toast({
+                title: "Commande envoyée",
+                description: "La commande a été envoyée avec succès",
+            })
+            setOpen(false)
+        } catch (error) {
+            console.error('Error sending command:', error)
+            toast({
+                variant: "destructive",
+                title: "Erreur",
+                description: "Une erreur s'est produite lors de l'envoi de la commande",
+            })
+        }
+        setIsLoading(false)
+    }
+
     return (
         <div className='flex items-center gap-10 py-4'>
             <p>{field}</p>
-            <Dialog>
+            <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
                     <Button size={"icon"}>
                         <Edit size={18} />
                     </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                        <DialogTitle>Envoyer une commande</DialogTitle>
-                        <DialogDescription>
-                            Make changes to your profile here. Click save when you're done.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="name" className="text-right">
-                                Valeur
-                            </Label>
-                            <Input
-                                id="value"
-                                defaultValue=""
-                                containerClassName='col-span-3'
+                    <Form {...form}>
+                        <form className="space-y-8">
+                            <DialogHeader>
+                                <DialogTitle>Envoyer une commande</DialogTitle>
+                                <DialogDescription>
+                                    Cliquer sur le bouton pour écrire la nouvelle valeur du champ
+                                </DialogDescription>
+                            </DialogHeader>
+                            <FormField
+                                control={form.control}
+                                name="value"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Nouvelle valeur</FormLabel>
+                                        <FormControl>
+                                            <Input type='number' placeholder="Valeur..." {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
                             />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <ButtonSubmit label="Envoyer" type="submit" onClick={() => {}} />
-                    </DialogFooter>
+                            <DialogFooter>
+                                <ButtonSubmit label="Envoyer" type="submit" loading={isLoading} onClick={form.handleSubmit(onSubmit)} />
+                            </DialogFooter>
+                        </form>
+                    </Form>
                 </DialogContent>
             </Dialog>
         </div>

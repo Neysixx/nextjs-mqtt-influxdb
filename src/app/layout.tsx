@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "@/lib/providers";
-import { ToastProvider } from "@/components/ui/toast";
+import { Toaster } from "@/components/ui/toaster"
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -32,7 +32,7 @@ export default function RootLayout({
       >
         <Providers attribute="class" defaultTheme="dark" enableSystem>
           <main>{children}</main>
-          <ToastProvider />
+          <Toaster />
         </Providers>
       </body>
     </html>

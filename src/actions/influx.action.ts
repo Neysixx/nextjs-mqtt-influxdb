@@ -20,8 +20,6 @@ export async function GetDatas(): Promise<ActionResponse<EquipmentFields[]>> {
 
     const data = await queryData(query) as QueryResponse[];
 
-    console.log("Data:", data);
-
     let equipments: EquipmentFields[] = [];
 
     data.forEach(row => {
